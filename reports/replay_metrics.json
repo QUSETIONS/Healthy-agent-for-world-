@@ -1,0 +1,7 @@
+{
+  "episodes": 30,
+  "diagnosis_accuracy": 1.0,
+  "key_test_hit_rate": 1.0,
+  "over_testing_rate": 0.0,
+  "dangerous_miss_rate": 0.0
+}
