@@ -15,8 +15,10 @@ Local medical multi-agent system with an internal world model for multi-turn dia
 - Explainable outputs: diagnosis confidence + evidence chain
 - Audit logging for session/decision traceability
 - API permission control via `X-API-Key`
+- Clinical pathway templates with per-session progress view
 - Probabilistic observation noise with seed control and scoped overrides
 - Replay evaluation with persisted reports (JSON + CSV)
+- Regression quality gate for release checks
 
 ## Project Structure
 
@@ -83,6 +85,12 @@ python -m pytest
 python scripts/eval_replay.py
 ```
 
+6) Run quality gate
+
+```bash
+python scripts/quality_gate.py
+```
+
 Generated files:
 
 - `reports/replay_metrics.json`
@@ -97,6 +105,7 @@ Generated files:
   - response includes `diagnosis_confidence`, `evidence_chain`, `escalate_to_human`, `refusal`, `refusal_reason`
 - `GET /sessions`
 - `GET /sessions/{session_id}/turns`
+- `GET /sessions/{session_id}/pathway`
 - `GET /sessions/{session_id}/state`
 
 ## Noise Configuration

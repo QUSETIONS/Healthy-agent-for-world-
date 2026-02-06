@@ -36,6 +36,13 @@ def test_api_start_and_chat() -> None:
     assert turns.status_code == 200
     assert turns.json()["items"]
 
+    pathway = client.get(f"/sessions/{session_id}/pathway")
+    assert pathway.status_code == 200
+    p = pathway.json()
+    assert p["case_id"] == "resp_001"
+    assert p["total_steps"] >= 1
+    assert 0.0 <= p["progress"] <= 1.0
+
 
 def test_dashboard_route_served() -> None:
     os.environ.pop("HEALTHY_AGENT_API_KEY", None)

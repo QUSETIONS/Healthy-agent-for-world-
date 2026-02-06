@@ -8,6 +8,7 @@ from uuid import uuid4
 from .audit import AuditLogger
 from .knowledge import GuidelineRetriever
 from .models import AgentTurn, PatientState
+from .pathways import pathway_status
 from .subagents import DiagnosticAgent, SafetyAgent, TriageAgent
 from .tools import ToolRegistry, build_default_registry
 from .world_model import MedicalWorldModel
@@ -181,6 +182,13 @@ class MedicalAgentSystem:
         if runtime is None:
             raise ValueError(f"Unknown session_id: {session_id}")
         return list(runtime.turns)
+
+    def pathway(self, session_id: str) -> dict[str, object]:
+        runtime = self._sessions.get(session_id)
+        if runtime is None:
+            raise ValueError(f"Unknown session_id: {session_id}")
+        state = runtime.world_model.get_state()
+        return pathway_status(runtime.case_id, state.completed_tests)
 
     @staticmethod
     def _guideline_refs(runtime: SessionRuntime, state: PatientState, diagnosis: str) -> tuple[list[str], float]:

@@ -152,3 +152,11 @@ def list_turns(session_id: str, _: None = Depends(require_api_key)) -> dict[str,
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"items": [_turn_to_dict(t) for t in turns]}
+
+
+@app.get("/sessions/{session_id}/pathway")
+def get_pathway(session_id: str, _: None = Depends(require_api_key)) -> dict[str, object]:
+    try:
+        return system.pathway(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

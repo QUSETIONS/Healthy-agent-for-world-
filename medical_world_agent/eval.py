@@ -32,6 +32,14 @@ class ReplayEpisode:
     dangerous_miss: int
 
 
+@dataclass(frozen=True)
+class QualityThresholds:
+    min_diagnosis_accuracy: float = 0.8
+    min_key_test_hit_rate: float = 0.8
+    max_over_testing_rate: float = 0.25
+    max_dangerous_miss_rate: float = 0.0
+
+
 def run_replay_evaluation(
     episodes: int = 30,
     max_turns: int = 4,
@@ -82,6 +90,7 @@ def run_replay_evaluation(
         key_hit = len(ordered_set.intersection(key_tests)) / len(key_tests)
         key_test_hit_sum += key_hit
 
+        non_key = 0
         if ordered_set:
             non_key = len([t for t in ordered_set if t not in key_tests])
             over_testing_sum += non_key / len(ordered_set)
@@ -171,3 +180,24 @@ def save_replay_report(
             )
 
     return (json_path, csv_path)
+
+
+def quality_gate(metrics: ReplayMetrics, thresholds: QualityThresholds) -> tuple[bool, list[str]]:
+    failures: list[str] = []
+    if metrics.diagnosis_accuracy < thresholds.min_diagnosis_accuracy:
+        failures.append(
+            f"diagnosis_accuracy={metrics.diagnosis_accuracy:.3f} < {thresholds.min_diagnosis_accuracy:.3f}"
+        )
+    if metrics.key_test_hit_rate < thresholds.min_key_test_hit_rate:
+        failures.append(
+            f"key_test_hit_rate={metrics.key_test_hit_rate:.3f} < {thresholds.min_key_test_hit_rate:.3f}"
+        )
+    if metrics.over_testing_rate > thresholds.max_over_testing_rate:
+        failures.append(
+            f"over_testing_rate={metrics.over_testing_rate:.3f} > {thresholds.max_over_testing_rate:.3f}"
+        )
+    if metrics.dangerous_miss_rate > thresholds.max_dangerous_miss_rate:
+        failures.append(
+            f"dangerous_miss_rate={metrics.dangerous_miss_rate:.3f} > {thresholds.max_dangerous_miss_rate:.3f}"
+        )
+    return (len(failures) == 0, failures)
