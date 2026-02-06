@@ -13,6 +13,8 @@ Local medical multi-agent system with an internal world model for multi-turn dia
 - Confidence-ranked guideline evidence references
 - Refusal-and-handoff policy for high-risk or low-confidence scenarios
 - Explainable outputs: diagnosis confidence + evidence chain
+- Audit logging for session/decision traceability
+- API permission control via `X-API-Key`
 - Probabilistic observation noise with seed control and scoped overrides
 - Replay evaluation with persisted reports (JSON + CSV)
 
@@ -26,6 +28,7 @@ Local medical multi-agent system with an internal world model for multi-turn dia
 - `medical_world_agent/api.py`: FastAPI endpoints
 - `medical_world_agent/cli.py`: local terminal interaction
 - `medical_world_agent/eval.py`: replay evaluation and report writer
+- `reports/audit_log.jsonl`: append-only audit trail
 - `scripts/eval_replay.py`: runnable evaluation entrypoint
 - `tests/`: unit/integration tests
 
@@ -47,6 +50,18 @@ python -m medical_world_agent.cli --case-id chest_pain_001
 
 ```bash
 uvicorn medical_world_agent.api:app --host 0.0.0.0 --port 8000
+```
+
+Optional access control:
+
+```bash
+set HEALTHY_AGENT_API_KEY=your-secret-key
+```
+
+Then pass request header:
+
+```text
+X-API-Key: your-secret-key
 ```
 
 4) Run tests

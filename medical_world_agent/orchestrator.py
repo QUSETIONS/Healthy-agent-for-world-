@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from .audit import AuditLogger
 from .knowledge import GuidelineRetriever
 from .models import AgentTurn, PatientState
 from .subagents import DiagnosticAgent, SafetyAgent, TriageAgent
@@ -21,12 +22,14 @@ class SessionRuntime:
     safety: SafetyAgent
     retriever: GuidelineRetriever
     evidence_top_k: int
+    audit: AuditLogger
     turns: list[AgentTurn] = field(default_factory=list)
 
 
 class MedicalAgentSystem:
-    def __init__(self) -> None:
+    def __init__(self, audit_log_path: str = "reports/audit_log.jsonl") -> None:
         self._sessions: dict[str, SessionRuntime] = {}
+        self._audit = AuditLogger(audit_log_path)
 
     def start_session(
         self,
@@ -53,8 +56,18 @@ class MedicalAgentSystem:
             safety=SafetyAgent(),
             retriever=GuidelineRetriever(corpus_path=knowledge_corpus_path, corpus_url=knowledge_corpus_url),
             evidence_top_k=max(1, evidence_top_k),
+            audit=self._audit,
         )
         self._sessions[runtime.session_id] = runtime
+        runtime.audit.write(
+            "session_start",
+            {
+                "session_id": runtime.session_id,
+                "case_id": case_id,
+                "observation_noise": observation_noise,
+                "evidence_top_k": runtime.evidence_top_k,
+            },
+        )
         return runtime.session_id
 
     def chat(self, session_id: str, user_message: str) -> AgentTurn:
@@ -113,6 +126,19 @@ class MedicalAgentSystem:
             refusal_reason=refusal_reason,
         )
         runtime.turns.append(turn)
+        runtime.audit.write(
+            "chat_turn",
+            {
+                "session_id": session_id,
+                "user_message": user_message,
+                "tool": action.kind.value,
+                "diagnosis": diagnosis,
+                "diagnosis_confidence": diagnosis_confidence,
+                "emergency": emergency,
+                "refusal": refusal,
+                "escalate_to_human": escalate_to_human,
+            },
+        )
         return turn
 
     def state(self, session_id: str) -> PatientState:

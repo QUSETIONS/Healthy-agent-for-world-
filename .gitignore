@@ -8,3 +8,4 @@ venv/
 dist/
 build/
 *.egg-info/
+reports/audit_log.jsonl

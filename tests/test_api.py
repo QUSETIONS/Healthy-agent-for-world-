@@ -1,9 +1,11 @@
 from fastapi.testclient import TestClient
+import os
 
 from medical_world_agent.api import app
 
 
 def test_api_start_and_chat() -> None:
+    os.environ.pop("HEALTHY_AGENT_API_KEY", None)
     client = TestClient(app)
 
     start = client.post("/sessions/start", json={"case_id": "resp_001"})
@@ -25,3 +27,20 @@ def test_api_start_and_chat() -> None:
     assert "escalate_to_human" in payload
     assert "refusal" in payload
     assert "refusal_reason" in payload
+
+
+def test_api_key_guard() -> None:
+    os.environ["HEALTHY_AGENT_API_KEY"] = "secret-key"
+    client = TestClient(app)
+
+    unauthorized = client.post("/sessions/start", json={"case_id": "resp_001"})
+    assert unauthorized.status_code == 401
+
+    authorized = client.post(
+        "/sessions/start",
+        json={"case_id": "resp_001"},
+        headers={"X-API-Key": "secret-key"},
+    )
+    assert authorized.status_code == 200
+
+    os.environ.pop("HEALTHY_AGENT_API_KEY", None)

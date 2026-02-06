@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+import os
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from .orchestrator import MedicalAgentSystem
 
 app = FastAPI(title="Medical World-Model Agent", version="0.1.0")
 system = MedicalAgentSystem()
+
+
+def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
+    required = os.getenv("HEALTHY_AGENT_API_KEY", "")
+    if required and x_api_key != required:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class StartSessionRequest(BaseModel):
@@ -45,7 +53,7 @@ class ChatResponse(BaseModel):
 
 
 @app.post("/sessions/start", response_model=StartSessionResponse)
-def start_session(req: StartSessionRequest) -> StartSessionResponse:
+def start_session(req: StartSessionRequest, _: None = Depends(require_api_key)) -> StartSessionResponse:
     try:
         session_id = system.start_session(
             req.case_id,
@@ -62,7 +70,7 @@ def start_session(req: StartSessionRequest) -> StartSessionResponse:
 
 
 @app.post("/sessions/{session_id}/chat", response_model=ChatResponse)
-def chat(session_id: str, req: ChatRequest) -> ChatResponse:
+def chat(session_id: str, req: ChatRequest, _: None = Depends(require_api_key)) -> ChatResponse:
     try:
         turn = system.chat(session_id, req.message)
     except ValueError as exc:
@@ -86,7 +94,7 @@ def chat(session_id: str, req: ChatRequest) -> ChatResponse:
 
 
 @app.get("/sessions/{session_id}/state")
-def state(session_id: str) -> dict[str, object]:
+def state(session_id: str, _: None = Depends(require_api_key)) -> dict[str, object]:
     try:
         state_obj = system.state(session_id)
     except ValueError as exc:
