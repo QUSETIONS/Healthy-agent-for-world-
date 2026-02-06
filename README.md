@@ -8,6 +8,11 @@ Local medical multi-agent system with an internal world model for multi-turn dia
 - Internal clinical world model with `reset()` / `step()` interaction loop
 - Tool-based reasoning workflow: `ask_question`, `order_test`, `recommend_plan`
 - Hard red-flag safety override for emergency cases
+- Guideline retrieval layer for diagnosis-linked evidence references
+- External updatable knowledge source (`knowledge_corpus_path` / `knowledge_corpus_url`)
+- Confidence-ranked guideline evidence references
+- Refusal-and-handoff policy for high-risk or low-confidence scenarios
+- Explainable outputs: diagnosis confidence + evidence chain
 - Probabilistic observation noise with seed control and scoped overrides
 - Replay evaluation with persisted reports (JSON + CSV)
 
@@ -17,6 +22,7 @@ Local medical multi-agent system with an internal world model for multi-turn dia
 - `medical_world_agent/subagents.py`: triage, diagnostic, safety logic
 - `medical_world_agent/tools.py`: tool registry and dispatch
 - `medical_world_agent/orchestrator.py`: session lifecycle + end-to-end turn execution
+- `medical_world_agent/knowledge.py`: local guideline corpus and retriever
 - `medical_world_agent/api.py`: FastAPI endpoints
 - `medical_world_agent/cli.py`: local terminal interaction
 - `medical_world_agent/eval.py`: replay evaluation and report writer
@@ -63,9 +69,10 @@ Generated files:
 ## API Overview
 
 - `POST /sessions/start`
-  - body: `case_id`, optional `random_seed`, `observation_noise`, `noise_profile`
+  - body: `case_id`, optional `random_seed`, `observation_noise`, `noise_profile`, `knowledge_corpus_path`, `knowledge_corpus_url`, `evidence_top_k`
 - `POST /sessions/{session_id}/chat`
   - body: `message`
+  - response includes `diagnosis_confidence`, `evidence_chain`, `escalate_to_human`, `refusal`, `refusal_reason`
 - `GET /sessions/{session_id}/state`
 
 ## Noise Configuration
@@ -88,6 +95,22 @@ Example:
   "case_test": {"resp_001": {"cbc": 1.0}}
 }
 ```
+
+## External Knowledge Source
+
+Provide an external guideline corpus as JSON list with fields:
+
+- `guideline_id`
+- `title`
+- `source`
+- `tags` (string array)
+- `content`
+
+Session-level options:
+
+- `knowledge_corpus_path`: local JSON file path
+- `knowledge_corpus_url`: remote JSON endpoint
+- `evidence_top_k`: number of guideline references returned
 
 ## Safety Notes
 

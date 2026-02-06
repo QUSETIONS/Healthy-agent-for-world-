@@ -111,6 +111,39 @@ class DiagnosticAgent:
             return "建议立即启动卒中绿色通道，评估再灌注时窗与神经监护。"
         return "建议补充关键检查后再决策。"
 
+    def build_evidence_chain(self, state: PatientState, diagnosis: str) -> list[str]:
+        chain = [f"症状: {', '.join(state.symptoms)}"]
+
+        for test_name, value in state.completed_tests.items():
+            if "抬高" in value or "升高" in value or "浸润" in value or "阳性" in value or "阑尾" in value:
+                chain.append(f"检查证据({test_name}): {value}")
+
+        chain.append(f"诊断结论: {diagnosis}")
+        if len(chain) == 2 and "证据不足" in diagnosis:
+            chain.insert(1, "关键检查证据缺失")
+        return chain
+
+    def estimate_confidence(self, state: PatientState, diagnosis: str, guideline_confidence: float) -> float:
+        if "证据不足" in diagnosis:
+            base = 0.2
+        elif "心肌梗死" in diagnosis:
+            base = 0.92 if self._acs_evidence(state) else 0.55
+        elif "肺炎" in diagnosis:
+            base = 0.84 if self._pneumonia_evidence(state) else 0.5
+        elif "阑尾炎" in diagnosis:
+            base = 0.82 if "阑尾" in state.completed_tests.get("abdominal_ultrasound", "") else 0.5
+        elif "下尿路感染" in diagnosis:
+            has_uti = "亚硝酸盐" in state.completed_tests.get("urinalysis", "") and "菌" in state.completed_tests.get("urine_culture", "")
+            base = 0.82 if has_uti else 0.5
+        elif "脑卒中" in diagnosis:
+            has_stroke = "未见明显出血" in state.completed_tests.get("head_ct", "") and "nihss" in state.completed_tests.get("nihss", "").lower()
+            base = 0.8 if has_stroke else 0.5
+        else:
+            base = 0.45
+
+        score = 0.7 * base + 0.3 * max(0.0, min(1.0, guideline_confidence))
+        return round(max(0.0, min(1.0, score)), 3)
+
 
 class SafetyAgent:
     def evaluate(self, state: PatientState, diagnosis: str, urgency: str) -> tuple[str, bool, list[str], bool]:
@@ -146,3 +179,21 @@ class SafetyAgent:
             notice = "本系统为辅助决策工具，最终诊疗请由持证医生确认。"
 
         return (notice, emergency, red_flags, dangerous_miss)
+
+    @staticmethod
+    def handoff_decision(
+        *,
+        diagnosis: str,
+        emergency: bool,
+        dangerous_miss: bool,
+        evidence_confidence: float,
+    ) -> tuple[bool, bool, str]:
+        if emergency:
+            return (True, True, "高风险红旗触发，系统拒绝自动闭环，必须立即转人工急诊。")
+        if dangerous_miss:
+            return (True, True, "存在危险漏诊风险，系统拒绝继续自动建议，必须转人工复核。")
+        if "证据不足" in diagnosis:
+            return (True, True, "诊断证据不足，系统拒绝给出闭环处置建议，需转人工评估。")
+        if evidence_confidence < 0.5:
+            return (True, False, "证据匹配置信度偏低，建议人工复核。")
+        return (False, False, "")

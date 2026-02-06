@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from .knowledge import GuidelineRetriever
 from .models import AgentTurn, PatientState
 from .subagents import DiagnosticAgent, SafetyAgent, TriageAgent
 from .tools import ToolRegistry, build_default_registry
@@ -18,6 +19,8 @@ class SessionRuntime:
     triage: TriageAgent
     diagnostic: DiagnosticAgent
     safety: SafetyAgent
+    retriever: GuidelineRetriever
+    evidence_top_k: int
     turns: list[AgentTurn] = field(default_factory=list)
 
 
@@ -31,6 +34,9 @@ class MedicalAgentSystem:
         random_seed: int | None = None,
         observation_noise: float = 0.15,
         noise_profile: dict[str, Any] | None = None,
+        knowledge_corpus_path: str | None = None,
+        knowledge_corpus_url: str | None = None,
+        evidence_top_k: int = 3,
     ) -> str:
         world_model = MedicalWorldModel(
             random_seed=random_seed,
@@ -45,6 +51,8 @@ class MedicalAgentSystem:
             triage=TriageAgent(),
             diagnostic=DiagnosticAgent(),
             safety=SafetyAgent(),
+            retriever=GuidelineRetriever(corpus_path=knowledge_corpus_path, corpus_url=knowledge_corpus_url),
+            evidence_top_k=max(1, evidence_top_k),
         )
         self._sessions[runtime.session_id] = runtime
         return runtime.session_id
@@ -63,8 +71,29 @@ class MedicalAgentSystem:
         diagnosis = runtime.diagnostic.infer_diagnosis(latest_state)
         recommendation = runtime.diagnostic.treatment_plan(diagnosis)
         safety_notice, emergency, red_flags, dangerous_miss = runtime.safety.evaluate(latest_state, diagnosis, urgency)
+        guideline_refs, guideline_confidence = self._guideline_refs(runtime, latest_state, diagnosis)
+        evidence_chain = runtime.diagnostic.build_evidence_chain(latest_state, diagnosis)
+        diagnosis_confidence = runtime.diagnostic.estimate_confidence(latest_state, diagnosis, guideline_confidence)
+        escalate_to_human, refusal, refusal_reason = runtime.safety.handoff_decision(
+            diagnosis=diagnosis,
+            emergency=emergency,
+            dangerous_miss=dangerous_miss,
+            evidence_confidence=diagnosis_confidence,
+        )
 
-        message = self._compose_message(action.kind.value, result.observation, diagnosis, recommendation, safety_notice)
+        message = self._compose_message(
+            action.kind.value,
+            result.observation,
+            diagnosis,
+            recommendation,
+            safety_notice,
+            guideline_refs,
+            evidence_chain,
+            diagnosis_confidence,
+            escalate_to_human,
+            refusal,
+            refusal_reason,
+        )
         turn = AgentTurn(
             message=message,
             tool_action=action,
@@ -76,6 +105,12 @@ class MedicalAgentSystem:
             emergency=emergency,
             red_flags=red_flags,
             dangerous_miss=dangerous_miss,
+            guideline_refs=guideline_refs,
+            evidence_chain=evidence_chain,
+            diagnosis_confidence=diagnosis_confidence,
+            escalate_to_human=escalate_to_human,
+            refusal=refusal,
+            refusal_reason=refusal_reason,
         )
         runtime.turns.append(turn)
         return turn
@@ -97,17 +132,45 @@ class MedicalAgentSystem:
         return probe.list_case_ids()
 
     @staticmethod
+    def _guideline_refs(runtime: SessionRuntime, state: PatientState, diagnosis: str) -> tuple[list[str], float]:
+        query = f"{diagnosis} {' '.join(state.symptoms)} {' '.join(state.completed_tests.keys())}"
+        hits = runtime.retriever.retrieve(query, top_k=runtime.evidence_top_k)
+        refs = [
+            f"{h.snippet.guideline_id}: {h.snippet.title} | {h.snippet.source} | confidence={h.confidence:.3f}"
+            for h in hits
+        ]
+        confidence = max((h.confidence for h in hits), default=0.0)
+        return (refs, confidence)
+
+    @staticmethod
     def _compose_message(
         tool_name: str,
         observation: str,
         diagnosis: str,
         recommendation: str,
         safety_notice: str,
+        guideline_refs: list[str],
+        evidence_chain: list[str],
+        diagnosis_confidence: float,
+        escalate_to_human: bool,
+        refusal: bool,
+        refusal_reason: str,
     ) -> str:
+        refs = "\n".join(f"- {x}" for x in guideline_refs) if guideline_refs else "- 暂无匹配指南"
+        chain = "\n".join(f"- {x}" for x in evidence_chain) if evidence_chain else "- 无"
+        handoff = "是" if escalate_to_human else "否"
+        refused = "是" if refusal else "否"
+        refusal_line = refusal_reason if refusal_reason else "-"
         return (
             f"[工具调用] {tool_name}\n"
             f"[观察结果] {observation}\n"
             f"[诊断建议] {diagnosis}\n"
+            f"[诊断置信度] {diagnosis_confidence:.3f}\n"
+            f"[证据链]\n{chain}\n"
             f"[处置建议] {recommendation}\n"
-            f"[安全提示] {safety_notice}"
+            f"[安全提示] {safety_notice}\n"
+            f"[参考指南]\n{refs}\n"
+            f"[转人工] {handoff}\n"
+            f"[拒答] {refused}\n"
+            f"[拒答原因] {refusal_line}"
         )

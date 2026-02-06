@@ -14,6 +14,9 @@ class StartSessionRequest(BaseModel):
     random_seed: int | None = None
     observation_noise: float = 0.15
     noise_profile: dict[str, object] | None = None
+    knowledge_corpus_path: str | None = None
+    knowledge_corpus_url: str | None = None
+    evidence_top_k: int = 3
 
 
 class StartSessionResponse(BaseModel):
@@ -33,6 +36,12 @@ class ChatResponse(BaseModel):
     emergency: bool
     red_flags: list[str]
     dangerous_miss: bool
+    guideline_refs: list[str]
+    evidence_chain: list[str]
+    diagnosis_confidence: float
+    escalate_to_human: bool
+    refusal: bool
+    refusal_reason: str
 
 
 @app.post("/sessions/start", response_model=StartSessionResponse)
@@ -43,6 +52,9 @@ def start_session(req: StartSessionRequest) -> StartSessionResponse:
             random_seed=req.random_seed,
             observation_noise=req.observation_noise,
             noise_profile=req.noise_profile,
+            knowledge_corpus_path=req.knowledge_corpus_path,
+            knowledge_corpus_url=req.knowledge_corpus_url,
+            evidence_top_k=req.evidence_top_k,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -64,6 +76,12 @@ def chat(session_id: str, req: ChatRequest) -> ChatResponse:
         emergency=turn.emergency,
         red_flags=turn.red_flags,
         dangerous_miss=turn.dangerous_miss,
+        guideline_refs=turn.guideline_refs,
+        evidence_chain=turn.evidence_chain,
+        diagnosis_confidence=turn.diagnosis_confidence,
+        escalate_to_human=turn.escalate_to_human,
+        refusal=turn.refusal,
+        refusal_reason=turn.refusal_reason,
     )
 
 

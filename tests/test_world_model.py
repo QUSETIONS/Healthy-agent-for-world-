@@ -3,7 +3,7 @@ from medical_world_agent.world_model import MedicalWorldModel
 
 
 def test_world_model_reset_and_step() -> None:
-    model = MedicalWorldModel()
+    model = MedicalWorldModel(observation_noise=0.0)
     state = model.reset("chest_pain_001")
     assert state.case_id == "chest_pain_001"
     assert "胸痛" in state.symptoms

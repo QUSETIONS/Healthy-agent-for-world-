@@ -19,3 +19,9 @@ def test_api_start_and_chat() -> None:
     assert "emergency" in payload
     assert "red_flags" in payload
     assert "dangerous_miss" in payload
+    assert "guideline_refs" in payload
+    assert "evidence_chain" in payload
+    assert "diagnosis_confidence" in payload
+    assert "escalate_to_human" in payload
+    assert "refusal" in payload
+    assert "refusal_reason" in payload

@@ -56,3 +56,9 @@ class AgentTurn:
     emergency: bool
     red_flags: list[str] = field(default_factory=list)
     dangerous_miss: bool = False
+    guideline_refs: list[str] = field(default_factory=list)
+    evidence_chain: list[str] = field(default_factory=list)
+    diagnosis_confidence: float = 0.0
+    escalate_to_human: bool = False
+    refusal: bool = False
+    refusal_reason: str = ""
