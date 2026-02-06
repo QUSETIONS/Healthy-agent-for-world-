@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -15,6 +16,8 @@ from .world_model import MedicalWorldModel
 @dataclass
 class SessionRuntime:
     session_id: str
+    case_id: str
+    created_at: str
     world_model: MedicalWorldModel
     tools: ToolRegistry
     triage: TriageAgent
@@ -49,6 +52,8 @@ class MedicalAgentSystem:
         world_model.reset(case_id, random_seed=random_seed)
         runtime = SessionRuntime(
             session_id=str(uuid4()),
+            case_id=case_id,
+            created_at=datetime.now(timezone.utc).isoformat(),
             world_model=world_model,
             tools=build_default_registry(world_model),
             triage=TriageAgent(),
@@ -156,6 +161,26 @@ class MedicalAgentSystem:
     def available_cases(self) -> list[str]:
         probe = MedicalWorldModel()
         return probe.list_case_ids()
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for runtime in self._sessions.values():
+            items.append(
+                {
+                    "session_id": runtime.session_id,
+                    "case_id": runtime.case_id,
+                    "created_at": runtime.created_at,
+                    "turn_count": len(runtime.turns),
+                }
+            )
+        items.sort(key=lambda x: x["created_at"], reverse=True)
+        return items
+
+    def turns(self, session_id: str) -> list[AgentTurn]:
+        runtime = self._sessions.get(session_id)
+        if runtime is None:
+            raise ValueError(f"Unknown session_id: {session_id}")
+        return list(runtime.turns)
 
     @staticmethod
     def _guideline_refs(runtime: SessionRuntime, state: PatientState, diagnosis: str) -> tuple[list[str], float]:

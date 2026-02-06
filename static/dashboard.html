@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Healthy Agent Dashboard</title>
+  <style>
+    :root { --bg:#f5f7fb; --card:#ffffff; --line:#d8deea; --ink:#1d2736; --muted:#6b778a; --accent:#1769aa; --danger:#b00020; }
+    body { margin:0; font-family: "Segoe UI", Tahoma, sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:linear-gradient(120deg,#1769aa,#2e7d32); color:#fff; padding:12px 16px; display:flex; gap:12px; align-items:center; }
+    header h1 { margin:0; font-size:18px; }
+    header input { min-width:220px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.15); color:#fff; border-radius:6px; padding:6px 8px; }
+    header input::placeholder { color:#e6eef7; }
+    .layout { display:grid; grid-template-columns: 280px 1fr 360px; gap:12px; padding:12px; height:calc(100vh - 64px); }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; }
+    .panel h2 { margin:0; font-size:14px; padding:10px 12px; border-bottom:1px solid var(--line); }
+    .panel .body { padding:10px; overflow:auto; }
+    .session-item { border:1px solid var(--line); border-radius:8px; padding:8px; margin-bottom:8px; cursor:pointer; }
+    .session-item.active { border-color:var(--accent); box-shadow:0 0 0 2px rgba(23,105,170,.15); }
+    .muted { color:var(--muted); font-size:12px; }
+    .row { display:flex; gap:8px; margin-bottom:8px; }
+    select,input,button,textarea { font:inherit; }
+    input,select,textarea { width:100%; border:1px solid var(--line); border-radius:6px; padding:8px; }
+    button { border:0; border-radius:6px; padding:8px 10px; background:var(--accent); color:#fff; cursor:pointer; }
+    button.secondary { background:#4a5568; }
+    button.warn { background:var(--danger); }
+    .chat-bubble { border:1px solid var(--line); border-radius:8px; padding:8px; margin-bottom:8px; background:#fff; }
+    .chat-bubble.user { background:#eef5ff; }
+    pre { white-space:pre-wrap; margin:0; font-family:Consolas, monospace; font-size:12px; }
+    .tag { display:inline-block; font-size:11px; border:1px solid var(--line); border-radius:999px; padding:2px 8px; margin-right:6px; }
+    .danger { color:var(--danger); font-weight:600; }
+    @media (max-width: 1200px) { .layout { grid-template-columns: 1fr; height:auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Healthy Agent Dashboard</h1>
+    <input id="apiKey" type="password" placeholder="X-API-Key (optional)" />
+    <button class="secondary" onclick="refreshSessions()">Refresh</button>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>Sessions</h2>
+      <div class="body">
+        <div class="row">
+          <select id="caseId">
+            <option value="chest_pain_001">chest_pain_001</option>
+            <option value="resp_001">resp_001</option>
+            <option value="abd_001">abd_001</option>
+            <option value="uti_001">uti_001</option>
+            <option value="stroke_001">stroke_001</option>
+          </select>
+        </div>
+        <div class="row">
+          <button onclick="createSession()">New Session</button>
+        </div>
+        <div id="sessions"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Chat</h2>
+      <div class="body" id="chat"></div>
+      <div class="body" style="border-top:1px solid var(--line)">
+        <div class="row">
+          <textarea id="message" rows="3" placeholder="Type message..."></textarea>
+        </div>
+        <div class="row">
+          <button onclick="sendMessage()">Send</button>
+          <button class="secondary" onclick="prefillSuggest()">Ask For Recommendation</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Decision Detail</h2>
+      <div class="body" id="detail">
+        <div class="muted">Select a session and send messages.</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let activeSessionId = null;
+
+    function headers() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const h = { 'Content-Type': 'application/json' };
+      if (apiKey) h['X-API-Key'] = apiKey;
+      return h;
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+    async function refreshSessions() {
+      try {
+        const data = await api('/sessions');
+        const box = document.getElementById('sessions');
+        box.innerHTML = '';
+        for (const s of data.items) {
+          const div = document.createElement('div');
+          div.className = 'session-item' + (s.session_id === activeSessionId ? ' active' : '');
+          div.innerHTML = `<div><strong>${esc(s.case_id)}</strong></div><div class="muted">${esc(s.session_id)}</div><div class="muted">turns=${s.turn_count}</div>`;
+          div.onclick = () => selectSession(s.session_id);
+          box.appendChild(div);
+        }
+      } catch (e) {
+        alert('Refresh sessions failed: ' + e.message);
+      }
+    }
+
+    async function createSession() {
+      const caseId = document.getElementById('caseId').value;
+      try {
+        const data = await api('/sessions/start', {
+          method: 'POST',
+          body: JSON.stringify({ case_id: caseId, observation_noise: 0.15, evidence_top_k: 3 })
+        });
+        activeSessionId = data.session_id;
+        await refreshSessions();
+        await loadTurns();
+      } catch (e) {
+        alert('Create session failed: ' + e.message);
+      }
+    }
+
+    async function selectSession(id) {
+      activeSessionId = id;
+      await refreshSessions();
+      await loadTurns();
+    }
+
+    async function loadTurns() {
+      if (!activeSessionId) return;
+      try {
+        const data = await api(`/sessions/${activeSessionId}/turns`);
+        const chat = document.getElementById('chat');
+        chat.innerHTML = '';
+        for (const t of data.items) {
+          const div = document.createElement('div');
+          div.className = 'chat-bubble';
+          div.innerHTML = `<div><span class="tag">${esc(t.tool)}</span><span class="tag">urgency=${esc(t.urgency)}</span></div><pre>${esc(t.message)}</pre>`;
+          chat.appendChild(div);
+        }
+        if (data.items.length > 0) renderDetail(data.items[data.items.length - 1]);
+      } catch (e) {
+        alert('Load turns failed: ' + e.message);
+      }
+    }
+
+    function renderDetail(t) {
+      const html = `
+        <div><strong>Diagnosis:</strong> ${esc(t.diagnosis)}</div>
+        <div><strong>Confidence:</strong> ${esc(t.diagnosis_confidence)}</div>
+        <div><strong>Escalate:</strong> ${t.escalate_to_human ? '<span class="danger">YES</span>' : 'NO'}</div>
+        <div><strong>Refusal:</strong> ${t.refusal ? '<span class="danger">YES</span>' : 'NO'}</div>
+        <div class="muted" style="margin:6px 0 10px 0;">${esc(t.refusal_reason || '-')}</div>
+        <div><strong>Evidence Chain</strong></div>
+        <pre>${esc((t.evidence_chain || []).join('\n'))}</pre>
+        <div style="margin-top:10px;"><strong>Guidelines</strong></div>
+        <pre>${esc((t.guideline_refs || []).join('\n'))}</pre>
+      `;
+      document.getElementById('detail').innerHTML = html;
+    }
+
+    async function sendMessage() {
+      if (!activeSessionId) { alert('Create/select a session first'); return; }
+      const message = document.getElementById('message').value.trim();
+      if (!message) return;
+      document.getElementById('message').value = '';
+
+      const chat = document.getElementById('chat');
+      const mine = document.createElement('div');
+      mine.className = 'chat-bubble user';
+      mine.innerHTML = `<pre>${esc(message)}</pre>`;
+      chat.appendChild(mine);
+
+      try {
+        await api(`/sessions/${activeSessionId}/chat`, { method: 'POST', body: JSON.stringify({ message }) });
+        await refreshSessions();
+        await loadTurns();
+      } catch (e) {
+        alert('Send message failed: ' + e.message);
+      }
+    }
+
+    function prefillSuggest() {
+      document.getElementById('message').value = '请给出建议';
+    }
+
+    refreshSessions();
+  </script>
+</body>
+</html>

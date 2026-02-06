@@ -28,6 +28,22 @@ def test_api_start_and_chat() -> None:
     assert "refusal" in payload
     assert "refusal_reason" in payload
 
+    sessions = client.get("/sessions")
+    assert sessions.status_code == 200
+    assert sessions.json()["items"]
+
+    turns = client.get(f"/sessions/{session_id}/turns")
+    assert turns.status_code == 200
+    assert turns.json()["items"]
+
+
+def test_dashboard_route_served() -> None:
+    os.environ.pop("HEALTHY_AGENT_API_KEY", None)
+    client = TestClient(app)
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "Healthy Agent Dashboard" in page.text
+
 
 def test_api_key_guard() -> None:
     os.environ["HEALTHY_AGENT_API_KEY"] = "secret-key"

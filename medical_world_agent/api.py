@@ -1,20 +1,51 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .models import AgentTurn
 from .orchestrator import MedicalAgentSystem
 
 app = FastAPI(title="Medical World-Model Agent", version="0.1.0")
 system = MedicalAgentSystem()
+_static_dir = Path(__file__).resolve().parents[1] / "static"
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
 def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
     required = os.getenv("HEALTHY_AGENT_API_KEY", "")
     if required and x_api_key != required:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _turn_to_dict(t: AgentTurn) -> dict[str, object]:
+    return {
+        "message": t.message,
+        "tool": t.tool_action.kind.value,
+        "diagnosis": t.diagnosis,
+        "diagnosis_confidence": t.diagnosis_confidence,
+        "recommendation": t.recommendation,
+        "urgency": t.urgency,
+        "safety_notice": t.safety_notice,
+        "emergency": t.emergency,
+        "red_flags": t.red_flags,
+        "dangerous_miss": t.dangerous_miss,
+        "guideline_refs": t.guideline_refs,
+        "evidence_chain": t.evidence_chain,
+        "escalate_to_human": t.escalate_to_human,
+        "refusal": t.refusal,
+        "refusal_reason": t.refusal_reason,
+    }
+
+
+@app.get("/")
+def dashboard() -> FileResponse:
+    return FileResponse(_static_dir / "dashboard.html")
 
 
 class StartSessionRequest(BaseModel):
@@ -107,3 +138,17 @@ def state(session_id: str, _: None = Depends(require_api_key)) -> dict[str, obje
         "completed_tests": state_obj.completed_tests,
         "history": state_obj.history,
     }
+
+
+@app.get("/sessions")
+def list_sessions(_: None = Depends(require_api_key)) -> dict[str, object]:
+    return {"items": system.list_sessions()}
+
+
+@app.get("/sessions/{session_id}/turns")
+def list_turns(session_id: str, _: None = Depends(require_api_key)) -> dict[str, object]:
+    try:
+        turns = system.turns(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"items": [_turn_to_dict(t) for t in turns]}

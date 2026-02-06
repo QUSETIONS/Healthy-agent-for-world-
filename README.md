@@ -28,6 +28,7 @@ Local medical multi-agent system with an internal world model for multi-turn dia
 - `medical_world_agent/api.py`: FastAPI endpoints
 - `medical_world_agent/cli.py`: local terminal interaction
 - `medical_world_agent/eval.py`: replay evaluation and report writer
+- `static/dashboard.html`: minimal web operations dashboard
 - `reports/audit_log.jsonl`: append-only audit trail
 - `scripts/eval_replay.py`: runnable evaluation entrypoint
 - `tests/`: unit/integration tests
@@ -50,6 +51,12 @@ python -m medical_world_agent.cli --case-id chest_pain_001
 
 ```bash
 uvicorn medical_world_agent.api:app --host 0.0.0.0 --port 8000
+```
+
+Open dashboard:
+
+```text
+http://localhost:8000/
 ```
 
 Optional access control:
@@ -88,6 +95,8 @@ Generated files:
 - `POST /sessions/{session_id}/chat`
   - body: `message`
   - response includes `diagnosis_confidence`, `evidence_chain`, `escalate_to_human`, `refusal`, `refusal_reason`
+- `GET /sessions`
+- `GET /sessions/{session_id}/turns`
 - `GET /sessions/{session_id}/state`
 
 ## Noise Configuration
