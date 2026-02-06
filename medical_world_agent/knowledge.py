@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 import re
 from typing import Any
 from urllib.request import urlopen
+
+from .validators import validate_url
 
 
 @dataclass(frozen=True)
@@ -20,7 +24,7 @@ class GuidelineSnippet:
 @dataclass(frozen=True)
 class GuidelineHit:
     snippet: GuidelineSnippet
-    score: int
+    score: float
     confidence: float
 
 
@@ -44,16 +48,19 @@ class GuidelineRetriever:
                 docs = loaded
 
         self._docs = docs
+        self._doc_tokens = [_tokenize_list(f"{doc.title} {' '.join(doc.tags)} {doc.content}") for doc in self._docs]
+        self._idf = _build_idf(self._doc_tokens)
 
     def retrieve(self, query: str, top_k: int = 3) -> list[GuidelineHit]:
-        terms = _tokenize(query)
+        terms = _tokenize_list(query)
         if not terms:
             return []
 
-        scored: list[tuple[int, GuidelineSnippet]] = []
-        for doc in self._docs:
-            bag = _tokenize(f"{doc.title} {' '.join(doc.tags)} {doc.content}")
-            score = sum(1 for term in terms if term in bag)
+        query_tf = Counter(terms)
+
+        scored: list[tuple[float, GuidelineSnippet]] = []
+        for doc, tokens in zip(self._docs, self._doc_tokens):
+            score = _tfidf_score(query_tf, tokens, self._idf)
             if score > 0:
                 scored.append((score, doc))
 
@@ -65,7 +72,7 @@ class GuidelineRetriever:
         max_score = max(score for score, _ in selected)
         hits: list[GuidelineHit] = []
         for score, doc in selected:
-            confidence = score / max(1, max_score)
+            confidence = score / max_score if max_score > 0 else 0.0
             hits.append(GuidelineHit(snippet=doc, score=score, confidence=round(confidence, 3)))
         return hits
 
@@ -73,6 +80,36 @@ class GuidelineRetriever:
 def _tokenize(text: str) -> set[str]:
     cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", text.lower())
     return {x for x in cleaned.split() if x}
+
+
+def _tokenize_list(text: str) -> list[str]:
+    cleaned = re.sub(r"[^\w\u4e00-\u9fff]+", " ", text.lower())
+    return [x for x in cleaned.split() if x]
+
+
+def _build_idf(doc_tokens: list[list[str]]) -> dict[str, float]:
+    doc_count = len(doc_tokens)
+    if doc_count == 0:
+        return {}
+    df: Counter[str] = Counter()
+    for tokens in doc_tokens:
+        df.update(set(tokens))
+    return {term: math.log((1 + doc_count) / (1 + freq)) + 1.0 for term, freq in df.items()}
+
+
+def _tfidf_score(query_tf: Counter[str], doc_tokens: list[str], idf: dict[str, float]) -> float:
+    if not doc_tokens:
+        return 0.0
+    doc_tf = Counter(doc_tokens)
+    doc_len = len(doc_tokens)
+    query_len = sum(query_tf.values())
+    score = 0.0
+    for term, qf in query_tf.items():
+        if term not in doc_tf:
+            continue
+        term_idf = idf.get(term, 0.0)
+        score += (qf / query_len) * (doc_tf[term] / doc_len) * term_idf * term_idf
+    return score
 
 
 def _load_corpus_from_path(path: str) -> tuple[GuidelineSnippet, ...]:
@@ -85,7 +122,8 @@ def _load_corpus_from_path(path: str) -> tuple[GuidelineSnippet, ...]:
 
 
 def _load_corpus_from_url(url: str, timeout_sec: float = 5.0) -> tuple[GuidelineSnippet, ...]:
-    with urlopen(url, timeout=timeout_sec) as resp:
+    safe_url = validate_url(url)
+    with urlopen(safe_url, timeout=timeout_sec) as resp:
         payload = json.loads(resp.read().decode("utf-8"))
     return _parse_corpus_payload(payload)
 

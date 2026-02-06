@@ -1,0 +1,26 @@
+Listing 'medical_world_agent'...
+Listing 'tests'...
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\Users\question\Healthy-agent-for-world-
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.2.0
+collected 59 items
+
+tests\test_api.py ...                                                    [  5%]
+tests\test_audit.py .                                                    [  6%]
+tests\test_case_loader.py ....                                           [ 13%]
+tests\test_eval.py ...                                                   [ 18%]
+tests\test_input_validation.py ...................                       [ 50%]
+tests\test_knowledge.py ..                                               [ 54%]
+tests\test_knowledge_upgrade.py ...                                      [ 59%]
+tests\test_orchestrator.py ....                                          [ 66%]
+tests\test_sanitizer.py ...........                                      [ 84%]
+tests\test_session_cleanup.py .....                                      [ 93%]
+tests\test_world_model.py ....                                           [100%]
+
+============================= 59 passed in 1.16s ==============================
+[verify] syntax: C:\Users\question\anaconda3\python.exe -m compileall medical_world_agent tests
+[verify] tests: C:\Users\question\anaconda3\python.exe -m pytest
+[verify] all checks passed

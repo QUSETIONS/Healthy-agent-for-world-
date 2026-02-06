@@ -1,0 +1,18 @@
+{
+  "max_sessions_boundary": {
+    "passed": true,
+    "concurrency": 80,
+    "max_sessions": 40,
+    "success_count": 40,
+    "limit_error_count": 40,
+    "other_errors": []
+  },
+  "ttl_boundary": {
+    "passed": true,
+    "ttl_seconds": 0.2,
+    "warm_sessions": 20,
+    "sessions_before_expire": 20,
+    "sessions_after_expire": 0
+  },
+  "passed": true
+}

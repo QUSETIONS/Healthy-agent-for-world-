@@ -1,0 +1,17 @@
+{
+  "case_id": "uti_001",
+  "demographics": {"age": 33, "sex": "female"},
+  "symptoms": ["尿频", "尿痛", "低热"],
+  "qa": {
+    "onset": "尿频尿痛2天，伴轻度发热。",
+    "risk_factor": "近期饮水较少，无已知肾病史。",
+    "allergy": "无明确药物过敏史。"
+  },
+  "tests": {
+    "urinalysis": "尿常规白细胞增多，亚硝酸盐阳性。",
+    "urine_culture": "尿培养提示大肠埃希菌生长。",
+    "cbc": "白细胞轻度升高。"
+  },
+  "final_diagnosis": "急性下尿路感染",
+  "key_tests": ["urinalysis", "urine_culture"]
+}

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Healthy Agent Dashboard</title>
+  <title>医疗智能体控制台</title>
   <style>
     :root { --bg:#f5f7fb; --card:#ffffff; --line:#d8deea; --ink:#1d2736; --muted:#6b778a; --accent:#1769aa; --danger:#b00020; }
     body { margin:0; font-family: "Segoe UI", Tahoma, sans-serif; background:var(--bg); color:var(--ink); }
@@ -34,14 +34,14 @@
 </head>
 <body>
   <header>
-    <h1>Healthy Agent Dashboard</h1>
-    <input id="apiKey" type="password" placeholder="X-API-Key (optional)" />
-    <button class="secondary" onclick="refreshSessions()">Refresh</button>
+    <h1>医疗智能体控制台</h1>
+    <input id="apiKey" type="password" placeholder="X-API-Key (可选)" />
+    <button class="secondary" onclick="refreshSessions()">刷新</button>
   </header>
 
   <div class="layout">
     <section class="panel">
-      <h2>Sessions</h2>
+      <h2>会话</h2>
       <div class="body">
         <div class="row">
           <select id="caseId">
@@ -53,36 +53,46 @@
           </select>
         </div>
         <div class="row">
-          <button onclick="createSession()">New Session</button>
+          <button onclick="createSession()">新建会话</button>
+          <button class="secondary" onclick="startReplay()">新建并自动回放</button>
         </div>
         <div id="sessions"></div>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Chat</h2>
+      <h2>对话</h2>
       <div class="body" id="chat"></div>
       <div class="body" style="border-top:1px solid var(--line)">
         <div class="row">
-          <textarea id="message" rows="3" placeholder="Type message..."></textarea>
+          <textarea id="message" rows="3" placeholder="输入消息..."></textarea>
         </div>
         <div class="row">
-          <button onclick="sendMessage()">Send</button>
-          <button class="secondary" onclick="prefillSuggest()">Ask For Recommendation</button>
+          <button onclick="sendMessage()">发送</button>
+          <button class="secondary" onclick="prefillSuggest()">填充建议请求</button>
         </div>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Decision Detail</h2>
+      <h2>决策详情</h2>
       <div class="body" id="detail">
-        <div class="muted">Select a session and send messages.</div>
+        <div class="muted">请选择一个会话并开始交互。</div>
       </div>
     </section>
   </div>
 
   <script>
     let activeSessionId = null;
+    let replayRunning = false;
+
+    const REPLAY_SCRIPT = {
+      chest_pain_001: ['起病时间', '危险因素', 'ecg', 'troponin', '请给出建议'],
+      resp_001: ['起病时间', 'chest_xray', 'cbc', '请给出建议'],
+      abd_001: ['起病时间', 'abdominal_ultrasound', '请给出建议'],
+      uti_001: ['起病时间', 'urinalysis', 'urine_culture', '请给出建议'],
+      stroke_001: ['起病时间', 'head_ct', 'nihss', '请给出建议']
+    };
 
     function headers() {
       const apiKey = document.getElementById('apiKey').value.trim();
@@ -110,12 +120,12 @@
         for (const s of data.items) {
           const div = document.createElement('div');
           div.className = 'session-item' + (s.session_id === activeSessionId ? ' active' : '');
-          div.innerHTML = `<div><strong>${esc(s.case_id)}</strong></div><div class="muted">${esc(s.session_id)}</div><div class="muted">turns=${s.turn_count}</div>`;
+          div.innerHTML = `<div><strong>${esc(s.case_id)}</strong></div><div class="muted">${esc(s.session_id)}</div><div class="muted">轮次=${s.turn_count}</div>`;
           div.onclick = () => selectSession(s.session_id);
           box.appendChild(div);
         }
       } catch (e) {
-        alert('Refresh sessions failed: ' + e.message);
+        alert('刷新会话失败: ' + e.message);
       }
     }
 
@@ -129,8 +139,10 @@
         activeSessionId = data.session_id;
         await refreshSessions();
         await loadTurns();
+        return data.session_id;
       } catch (e) {
-        alert('Create session failed: ' + e.message);
+        alert('创建会话失败: ' + e.message);
+        return null;
       }
     }
 
@@ -154,30 +166,30 @@
         }
         if (data.items.length > 0) renderDetail(data.items[data.items.length - 1]);
       } catch (e) {
-        alert('Load turns failed: ' + e.message);
+        alert('加载历史轮次失败: ' + e.message);
       }
     }
 
     function renderDetail(t) {
       const html = `
-        <div><strong>Diagnosis:</strong> ${esc(t.diagnosis)}</div>
-        <div><strong>Confidence:</strong> ${esc(t.diagnosis_confidence)}</div>
-        <div><strong>Escalate:</strong> ${t.escalate_to_human ? '<span class="danger">YES</span>' : 'NO'}</div>
-        <div><strong>Refusal:</strong> ${t.refusal ? '<span class="danger">YES</span>' : 'NO'}</div>
+        <div><strong>诊断:</strong> ${esc(t.diagnosis)}</div>
+        <div><strong>置信度:</strong> ${esc(t.diagnosis_confidence)}</div>
+        <div><strong>是否转人工:</strong> ${t.escalate_to_human ? '<span class=\"danger\">是</span>' : '否'}</div>
+        <div><strong>是否拒答:</strong> ${t.refusal ? '<span class=\"danger\">是</span>' : '否'}</div>
         <div class="muted" style="margin:6px 0 10px 0;">${esc(t.refusal_reason || '-')}</div>
-        <div><strong>Evidence Chain</strong></div>
+        <div><strong>证据链</strong></div>
         <pre>${esc((t.evidence_chain || []).join('\n'))}</pre>
-        <div style="margin-top:10px;"><strong>Guidelines</strong></div>
+        <div style="margin-top:10px;"><strong>指南引用</strong></div>
         <pre>${esc((t.guideline_refs || []).join('\n'))}</pre>
       `;
       document.getElementById('detail').innerHTML = html;
     }
 
-    async function sendMessage() {
-      if (!activeSessionId) { alert('Create/select a session first'); return; }
-      const message = document.getElementById('message').value.trim();
+    async function sendMessage(overrideMessage = null) {
+      if (!activeSessionId) { alert('请先创建或选择会话'); return; }
+      const message = (overrideMessage === null ? document.getElementById('message').value : overrideMessage).trim();
       if (!message) return;
-      document.getElementById('message').value = '';
+      if (overrideMessage === null) document.getElementById('message').value = '';
 
       const chat = document.getElementById('chat');
       const mine = document.createElement('div');
@@ -190,7 +202,28 @@
         await refreshSessions();
         await loadTurns();
       } catch (e) {
-        alert('Send message failed: ' + e.message);
+        alert('发送消息失败: ' + e.message);
+      }
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function startReplay() {
+      if (replayRunning) return;
+      replayRunning = true;
+      try {
+        const caseId = document.getElementById('caseId').value;
+        const sid = await createSession();
+        if (!sid) return;
+        const script = REPLAY_SCRIPT[caseId] || ['请继续', '请给出建议'];
+        for (const step of script) {
+          await sendMessage(step);
+          await sleep(250);
+        }
+      } finally {
+        replayRunning = false;
       }
     }
 

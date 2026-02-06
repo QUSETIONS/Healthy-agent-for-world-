@@ -1,0 +1,17 @@
+{
+  "case_id": "abd_001",
+  "demographics": {"age": 25, "sex": "male"},
+  "symptoms": ["右下腹痛", "恶心", "低热"],
+  "qa": {
+    "onset": "腹痛先脐周后转移至右下腹，约18小时。",
+    "risk_factor": "无特殊既往史。",
+    "allergy": "无。"
+  },
+  "tests": {
+    "cbc": "白细胞及中性粒细胞升高。",
+    "abdominal_ultrasound": "阑尾增粗，周围渗出。",
+    "urinalysis": "尿常规无感染证据。"
+  },
+  "final_diagnosis": "急性阑尾炎",
+  "key_tests": ["abdominal_ultrasound"]
+}

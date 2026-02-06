@@ -1,0 +1,17 @@
+{
+  "case_id": "resp_001",
+  "demographics": {"age": 41, "sex": "female"},
+  "symptoms": ["发热", "咳嗽", "咳痰"],
+  "qa": {
+    "onset": "发热咳嗽3天，夜间加重。",
+    "risk_factor": "近期受凉，无慢性肺病。",
+    "allergy": "青霉素过敏。"
+  },
+  "tests": {
+    "cbc": "白细胞12.8x10^9/L，中性粒细胞比例升高。",
+    "crp": "CRP升高。",
+    "chest_xray": "右下肺片状浸润影。"
+  },
+  "final_diagnosis": "社区获得性肺炎",
+  "key_tests": ["cbc", "chest_xray"]
+}

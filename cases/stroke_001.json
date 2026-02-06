@@ -1,0 +1,17 @@
+{
+  "case_id": "stroke_001",
+  "demographics": {"age": 68, "sex": "female"},
+  "symptoms": ["言语不清", "右侧肢体无力", "口角歪斜"],
+  "qa": {
+    "onset": "症状突发约1小时，进行性加重。",
+    "risk_factor": "房颤和高血压病史。",
+    "allergy": "无。"
+  },
+  "tests": {
+    "head_ct": "头颅CT未见明显出血灶。",
+    "nihss": "NIHSS评分8分。",
+    "ecg": "心电图示房颤。"
+  },
+  "final_diagnosis": "急性缺血性脑卒中",
+  "key_tests": ["head_ct", "nihss"]
+}

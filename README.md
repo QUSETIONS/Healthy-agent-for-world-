@@ -73,11 +73,15 @@ Then pass request header:
 X-API-Key: your-secret-key
 ```
 
-4) Run tests
+4) Run verification (LSP replacement)
 
 ```bash
-python -m pytest
+python scripts/verify.py
 ```
+
+This runs syntax validation (`compileall`), full tests (`pytest`), and concurrent boundary stress checks (`scripts/stress_sessions.py`) as a stable replacement for LSP-based diagnostics.
+
+Stress output artifact: `reports/stress_sessions_report.json`
 
 5) Run replay evaluation and generate reports
 

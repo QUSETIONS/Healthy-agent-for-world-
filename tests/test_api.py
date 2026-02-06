@@ -49,7 +49,7 @@ def test_dashboard_route_served() -> None:
     client = TestClient(app)
     page = client.get("/")
     assert page.status_code == 200
-    assert "Healthy Agent Dashboard" in page.text
+    assert '<html lang="zh-CN">' in page.text
 
 
 def test_api_key_guard() -> None:

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import random
 
+from .case_loader import load_key_tests
 from .orchestrator import MedicalAgentSystem
 from .world_model import MedicalWorldModel
 
@@ -53,6 +54,7 @@ def run_replay_evaluation(
 
     rng = random.Random(random_seed)
     case_ids = MedicalWorldModel().list_case_ids()
+    key_tests_map = load_key_tests()
 
     diagnosis_correct = 0
     key_test_hit_sum = 0.0
@@ -85,9 +87,9 @@ def run_replay_evaluation(
             if t.tool_action.kind.value == "order_test"
         ]
         ordered_set = {str(x) for x in ordered_tests if x}
-        key_tests = MedicalWorldModel.key_tests(case_id)
+        key_tests = key_tests_map.get(case_id, set())
 
-        key_hit = len(ordered_set.intersection(key_tests)) / len(key_tests)
+        key_hit = len(ordered_set.intersection(key_tests)) / len(key_tests) if key_tests else 0.0
         key_test_hit_sum += key_hit
 
         non_key = 0

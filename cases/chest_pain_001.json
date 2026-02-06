@@ -1,0 +1,17 @@
+{
+  "case_id": "chest_pain_001",
+  "demographics": {"age": 62, "sex": "male"},
+  "symptoms": ["胸痛", "呼吸急促", "出汗"],
+  "qa": {
+    "onset": "胸痛突发2小时，向左臂放射。",
+    "risk_factor": "吸烟30年，高血压病史。",
+    "allergy": "无明确药物过敏史。"
+  },
+  "tests": {
+    "ecg": "心电图提示II、III、aVF导联ST段抬高。",
+    "troponin": "肌钙蛋白显著升高。",
+    "chest_xray": "未见明显肺部感染灶。"
+  },
+  "final_diagnosis": "急性下壁心肌梗死",
+  "key_tests": ["ecg", "troponin"]
+}

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .models import AgentTurn
 from .orchestrator import MedicalAgentSystem
+from .sanitizer import sanitize_state_dict
+from .validators import ValidationError as InputValidationError
+from .validators import validate_corpus_path, validate_url
 
 app = FastAPI(title="Medical World-Model Agent", version="0.1.0")
 system = MedicalAgentSystem()
@@ -19,7 +23,8 @@ app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
     required = os.getenv("HEALTHY_AGENT_API_KEY", "")
-    if required and x_api_key != required:
+    provided = x_api_key or ""
+    if required and not hmac.compare_digest(provided, required):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -49,13 +54,13 @@ def dashboard() -> FileResponse:
 
 
 class StartSessionRequest(BaseModel):
-    case_id: str
+    case_id: str = Field(min_length=1, max_length=100)
     random_seed: int | None = None
-    observation_noise: float = 0.15
+    observation_noise: float = Field(default=0.15, ge=0.0, le=1.0)
     noise_profile: dict[str, object] | None = None
-    knowledge_corpus_path: str | None = None
-    knowledge_corpus_url: str | None = None
-    evidence_top_k: int = 3
+    knowledge_corpus_path: str | None = Field(default=None, max_length=500)
+    knowledge_corpus_url: str | None = Field(default=None, max_length=2000)
+    evidence_top_k: int = Field(default=3, ge=1, le=20)
 
 
 class StartSessionResponse(BaseModel):
@@ -63,7 +68,7 @@ class StartSessionResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=2000)
 
 
 class ChatResponse(BaseModel):
@@ -86,15 +91,25 @@ class ChatResponse(BaseModel):
 @app.post("/sessions/start", response_model=StartSessionResponse)
 def start_session(req: StartSessionRequest, _: None = Depends(require_api_key)) -> StartSessionResponse:
     try:
+        validated_url: str | None = None
+        if req.knowledge_corpus_url is not None:
+            validated_url = validate_url(req.knowledge_corpus_url)
+
+        validated_path: str | None = None
+        if req.knowledge_corpus_path is not None:
+            validated_path = validate_corpus_path(req.knowledge_corpus_path)
+
         session_id = system.start_session(
             req.case_id,
             random_seed=req.random_seed,
             observation_noise=req.observation_noise,
             noise_profile=req.noise_profile,
-            knowledge_corpus_path=req.knowledge_corpus_path,
-            knowledge_corpus_url=req.knowledge_corpus_url,
+            knowledge_corpus_path=validated_path,
+            knowledge_corpus_url=validated_url,
             evidence_top_k=req.evidence_top_k,
         )
+    except InputValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StartSessionResponse(session_id=session_id)
@@ -130,7 +145,7 @@ def state(session_id: str, _: None = Depends(require_api_key)) -> dict[str, obje
         state_obj = system.state(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {
+    raw = {
         "case_id": state_obj.case_id,
         "demographics": state_obj.demographics,
         "symptoms": state_obj.symptoms,
@@ -138,6 +153,7 @@ def state(session_id: str, _: None = Depends(require_api_key)) -> dict[str, obje
         "completed_tests": state_obj.completed_tests,
         "history": state_obj.history,
     }
+    return sanitize_state_dict(raw)
 
 
 @app.get("/sessions")
@@ -160,3 +176,12 @@ def get_pathway(session_id: str, _: None = Depends(require_api_key)) -> dict[str
         return system.pathway(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str, _: None = Depends(require_api_key)) -> dict[str, str]:
+    try:
+        system.delete_session(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"status": "deleted", "session_id": session_id}
